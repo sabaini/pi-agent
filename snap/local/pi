@@ -1,0 +1,22 @@
+#!/bin/sh
+set -eu
+
+if [ -z "${SNAP:-}" ]; then
+	printf 'error: SNAP is not set; pi must run inside the snap runtime\n' >&2
+	exit 1
+fi
+
+append_path() {
+	case ":${PATH:-}:" in
+		*:"$1":*) ;;
+		*) PATH="${PATH:+$PATH:}$1" ;;
+	esac
+}
+
+# Keep the caller's PATH first so pi's bash tool resolves host toolchains before
+# falling back to helper binaries staged in the snap, such as rg and fdfind.
+append_path "$SNAP/usr/bin"
+append_path "$SNAP/bin"
+export PATH
+
+exec "$SNAP/pi/pi" "$@"

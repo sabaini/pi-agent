@@ -1,0 +1,83 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  unit-tests:
+    name: Unit tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install just
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y just
+
+      - name: Run unit tests
+        run: just test-unit
+
+  lxd-snap-test:
+    name: Build snap and test in LXD
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install host dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y just
+
+      - name: Install Snapcraft and LXD
+        run: |
+          echo /snap/bin >> "$GITHUB_PATH"
+          export PATH="/snap/bin:$PATH"
+
+          if snap list lxd >/dev/null 2>&1; then
+            sudo snap refresh lxd --channel=5.21/stable
+          else
+            sudo snap install lxd --channel=5.21/stable
+          fi
+
+          if snap list snapcraft >/dev/null 2>&1; then
+            sudo snap refresh snapcraft
+          else
+            sudo snap install snapcraft --classic
+          fi
+
+          sudo lxd waitready
+          sudo lxd init --auto
+
+          # The GitHub runner process will not pick up new lxd group membership
+          # during the job, so grant this ephemeral runner access to the socket.
+          sudo chmod 666 /var/snap/lxd/common/lxd/unix.socket
+          lxc info
+
+      - name: Validate snap metadata
+        run: snapcraft expand-extensions
+
+      - name: Build snap
+        run: just pack
+
+      - name: Run LXD snap integration test
+        run: |
+          snap_path="$(ls -t pi-agent_*.snap | head -n 1)"
+          PI_AGENT_SNAP="$PWD/$snap_path" just test-lxd
+
+      - name: Upload snap artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pi-agent-snap
+          path: pi-agent_*.snap
+          if-no-files-found: ignore

@@ -1,0 +1,44 @@
+name: pi-agent
+title: Pi Agent
+base: core24
+version: "0.74.0"
+summary: Terminal coding agent
+description: |
+  Pi is a minimal terminal coding agent harness. This snap packages the
+  published Linux binary release and runs with classic confinement so it can
+  operate on arbitrary project directories and invoke the host toolchain.
+
+license: MIT
+website: https://pi.dev
+source-code: https://github.com/earendil-works/pi-mono
+issues: https://github.com/earendil-works/pi-mono/issues
+
+grade: devel
+confinement: classic
+
+platforms:
+  amd64:
+  arm64:
+
+apps:
+  pi:
+    command: bin/pi
+    aliases:
+      - pi
+
+parts:
+  pi:
+    plugin: nil
+    build-packages:
+      - ca-certificates
+      - curl
+      - tar
+    stage-packages:
+      - ca-certificates
+      - fd-find
+      - git
+      - ripgrep
+    override-build: |
+      set -eu
+      "$CRAFT_PROJECT_DIR/snap/local/fetch-release.sh"
+      install -Dm755 "$CRAFT_PROJECT_DIR/snap/local/pi" "$CRAFT_PART_INSTALL/bin/pi"
