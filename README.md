@@ -33,15 +33,14 @@ reproducible build, set `PI_AGENT_VERSION` explicitly:
 PI_AGENT_VERSION=0.75.3 just pack
 ```
 
-If `PI_AGENT_VERSION` is not set, the build uses `PI_AGENT_RELEASE_TAG` when
-present, otherwise it resolves the latest release from GitHub. The selected
-release downloads:
+If `PI_AGENT_VERSION` is not set, the build resolves the latest release from
+GitHub. The selected release downloads:
 
 ```text
-https://github.com/earendil-works/pi-mono/releases/download/v<VERSION>/pi-linux-<x64|arm64>.tar.gz
+https://github.com/earendil-works/pi-mono/releases/download/v<VERSION>/pi-linux-x64.tar.gz
 ```
 
-Supported Snap architectures are `amd64` and `arm64`.
+Supported Snap architecture is currently `amd64`. `arm64` is disabled until it can be properly tested.
 
 During packaging, the fetch script verifies the downloaded archive against the
 SHA-256 digest published for that release asset by GitHub.

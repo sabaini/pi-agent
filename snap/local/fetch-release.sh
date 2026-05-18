@@ -66,16 +66,13 @@ case "$CRAFT_ARCH_BUILD_FOR" in
 	amd64 | x86_64)
 		asset_arch='x64'
 		;;
-	arm64 | aarch64)
-		asset_arch='arm64'
-		;;
 	*)
 		die "unsupported snap architecture: $CRAFT_ARCH_BUILD_FOR"
 		;;
 esac
 
 release_repo="${PI_AGENT_RELEASE_REPO:-earendil-works/pi-mono}"
-release_tag="${PI_AGENT_RELEASE_TAG:-v$version}"
+release_tag="v$version"
 release_base_url="${PI_AGENT_RELEASE_BASE_URL:-https://github.com/$release_repo/releases/download}"
 release_api_url="${PI_AGENT_RELEASE_API_URL:-https://api.github.com/repos/$release_repo/releases/tags/$release_tag}"
 asset="pi-linux-$asset_arch.tar.gz"

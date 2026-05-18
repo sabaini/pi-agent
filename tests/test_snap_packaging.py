@@ -124,7 +124,8 @@ class SnapcraftYamlTests(unittest.TestCase):
 
     def test_declares_supported_architectures(self) -> None:
         text = read_text(SNAPCRAFT_YAML)
-        self.assertRegex(text, r"(?ms)^platforms:\n  amd64:\n  arm64:")
+        self.assertRegex(text, r"(?ms)^platforms:\n  amd64:\n")
+        self.assertNotRegex(text, r"(?m)^  arm64:")
 
     def test_declares_pi_app_command(self) -> None:
         text = read_text(SNAPCRAFT_YAML)
@@ -136,9 +137,24 @@ class SnapcraftYamlTests(unittest.TestCase):
         self.assertIn('PI_AGENT_VERSION="$version" "$CRAFT_PROJECT_DIR/snap/local/fetch-release.sh"', text)
         self.assertIn('snap/local/pi', text)
 
-    def test_does_not_patchelf_bun_release_binary(self) -> None:
+    def test_patchelf_only_applies_to_staged_helper_packages(self) -> None:
         text = read_text(SNAPCRAFT_YAML)
-        self.assertNotIn("enable-patchelf", text)
+        self.assertRegex(
+            text,
+            r"(?ms)^  staged-tools:\n"
+            r"    plugin: nil\n"
+            r"(?:    #.*\n)*"
+            r"    build-attributes:\n"
+            r"      - enable-patchelf\n"
+            r"    stage-packages:\n"
+            r"      - ca-certificates\n"
+            r"      - fd-find\n"
+            r"      - git\n"
+            r"      - ripgrep",
+        )
+        pi_part = re.search(r"(?ms)^  pi:\n(.*?)(?:\n  [A-Za-z0-9_-]+:|\Z)", text)
+        self.assertIsNotNone(pi_part)
+        self.assertNotIn("enable-patchelf", pi_part.group(1))
 
 
 class ScriptTests(unittest.TestCase):
@@ -155,15 +171,26 @@ class ScriptTests(unittest.TestCase):
             "https://github.com/earendil-works/pi-mono/releases/download/v0.74.0/pi-linux-x64.tar.gz",
         )
 
-    def test_fetch_release_maps_arm64_to_arm64_asset(self) -> None:
-        values = run_fetch_dry_run("arm64", "v0.74.0")
-        self.assertEqual(values["version"], "0.74.0")
-        self.assertEqual(values["arch"], "arm64")
-        self.assertEqual(values["asset"], "pi-linux-arm64.tar.gz")
-        self.assertEqual(
-            values["url"],
-            "https://github.com/earendil-works/pi-mono/releases/download/v0.74.0/pi-linux-arm64.tar.gz",
+    def test_fetch_release_rejects_arm64_until_tested(self) -> None:
+        env = os.environ.copy()
+        env.update(
+            {
+                "CRAFT_ARCH_BUILD_FOR": "arm64",
+                "CRAFT_PART_INSTALL": "/tmp/pi-agent-test-install",
+                "PI_AGENT_DRY_RUN": "1",
+                "PI_AGENT_VERSION": "0.74.0",
+            }
         )
+        result = subprocess.run(
+            [str(FETCH_RELEASE)],
+            cwd=ROOT,
+            env=env,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("unsupported snap architecture: arm64", result.stderr)
 
     def test_fetch_release_rejects_unsupported_architecture(self) -> None:
         env = os.environ.copy()
