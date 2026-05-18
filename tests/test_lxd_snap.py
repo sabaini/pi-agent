@@ -7,7 +7,6 @@ import uuid
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-SNAPCRAFT_YAML = ROOT / "snap" / "snapcraft.yaml"
 CONTAINER_IMAGE_CANDIDATES = ("ubuntu:26.04", "images:ubuntu/26.04")
 
 
@@ -46,11 +45,12 @@ def run_lxc(
     return run_command(["lxc", "exec", container, "--", "bash", "-lc", command], timeout=timeout, check=check)
 
 
-def get_snapcraft_version() -> str:
-    for line in SNAPCRAFT_YAML.read_text(encoding="utf-8").splitlines():
-        if line.startswith("version:"):
-            return line.split(":", 1)[1].strip().strip('"')
-    raise AssertionError("snap/snapcraft.yaml does not declare version")
+def get_installed_snap_version(container: str) -> str:
+    result = run_lxc(container, "snap list pi-agent | awk 'NR == 2 { print $2 }'")
+    version = result.stdout.strip()
+    if not version:
+        raise AssertionError("could not determine installed pi-agent snap version")
+    return version
 
 
 def find_built_snap() -> Path | None:
@@ -103,7 +103,7 @@ class LxdSnapIntegrationTests(unittest.TestCase):
         self.ensure_pi_alias()
 
         result = run_lxc(self.container, "PI_OFFLINE=1 pi --version", timeout=60)
-        version = get_snapcraft_version()
+        version = get_installed_snap_version(self.container)
         self.assertIn(version, result.stdout.strip())
 
     def launch_container(self) -> None:

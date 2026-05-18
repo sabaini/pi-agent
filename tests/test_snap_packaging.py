@@ -116,6 +116,8 @@ class SnapcraftYamlTests(unittest.TestCase):
         text = read_text(SNAPCRAFT_YAML)
         self.assertRegex(text, r"(?m)^name: pi-agent$")
         self.assertRegex(text, r"(?m)^base: core24$")
+        self.assertRegex(text, r"(?m)^adopt-info: pi$")
+        self.assertNotRegex(text, r"(?m)^version:")
         self.assertRegex(text, r"(?m)^confinement: classic$")
         self.assertRegex(text, r"(?m)^license: MIT$")
         self.assertRegex(text, r"(?m)^grade: devel$")
@@ -130,7 +132,8 @@ class SnapcraftYamlTests(unittest.TestCase):
 
     def test_uses_published_release_fetcher_and_wrapper(self) -> None:
         text = read_text(SNAPCRAFT_YAML)
-        self.assertIn('"$CRAFT_PROJECT_DIR/snap/local/fetch-release.sh"', text)
+        self.assertIn('craftctl set version="$version"', text)
+        self.assertIn('PI_AGENT_VERSION="$version" "$CRAFT_PROJECT_DIR/snap/local/fetch-release.sh"', text)
         self.assertIn('snap/local/pi', text)
 
     def test_does_not_patchelf_bun_release_binary(self) -> None:

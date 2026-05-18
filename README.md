@@ -26,7 +26,16 @@ pi --version
 
 ## Update the packaged Pi version
 
-Edit `version` in `snap/snapcraft.yaml`. The build downloads:
+The snap version is adopted from the Pi release selected during the build. For a
+reproducible build, set `PI_AGENT_VERSION` explicitly:
+
+```bash
+PI_AGENT_VERSION=0.75.3 just pack
+```
+
+If `PI_AGENT_VERSION` is not set, the build uses `PI_AGENT_RELEASE_TAG` when
+present, otherwise it resolves the latest release from GitHub. The selected
+release downloads:
 
 ```text
 https://github.com/earendil-works/pi-mono/releases/download/v<VERSION>/pi-linux-<x64|arm64>.tar.gz

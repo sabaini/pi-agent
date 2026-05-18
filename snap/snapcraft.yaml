@@ -1,7 +1,7 @@
 name: pi-agent
 title: Pi Agent
 base: core24
-version: "0.74.0"
+adopt-info: pi
 summary: Terminal coding agent
 description: |
   Pi is a minimal terminal coding agent harness. This snap packages the
@@ -40,5 +40,28 @@ parts:
       - ripgrep
     override-build: |
       set -eu
-      "$CRAFT_PROJECT_DIR/snap/local/fetch-release.sh"
+
+      version="${PI_AGENT_VERSION:-}"
+      if [ -z "$version" ] && [ -n "${PI_AGENT_RELEASE_TAG:-}" ]; then
+        version="${PI_AGENT_RELEASE_TAG#v}"
+      fi
+      if [ -z "$version" ]; then
+        release_repo="${PI_AGENT_RELEASE_REPO:-earendil-works/pi-mono}"
+        latest_api_url="${PI_AGENT_LATEST_RELEASE_API_URL:-https://api.github.com/repos/$release_repo/releases/latest}"
+        tag="$(curl --fail --location --show-error --retry 5 --retry-delay 2 \
+          --header 'Accept: application/vnd.github+json' \
+          --header 'X-GitHub-Api-Version: 2022-11-28' \
+          "$latest_api_url" |
+          tr -d '\n\r' |
+          sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')"
+        version="$tag"
+      fi
+      version="${version#v}"
+      [ -n "$version" ] || {
+        echo 'could not determine Pi release version' >&2
+        exit 1
+      }
+
+      craftctl set version="$version"
+      PI_AGENT_VERSION="$version" "$CRAFT_PROJECT_DIR/snap/local/fetch-release.sh"
       install -Dm755 "$CRAFT_PROJECT_DIR/snap/local/pi" "$CRAFT_PART_INSTALL/bin/pi"
