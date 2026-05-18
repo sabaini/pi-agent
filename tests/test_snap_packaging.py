@@ -1,3 +1,4 @@
+import hashlib
 import os
 import re
 import stat
@@ -37,6 +38,77 @@ def run_fetch_dry_run(arch: str, version: str = "0.74.0") -> dict[str, str]:
         check=True,
     )
     return dict(line.split("=", 1) for line in result.stdout.strip().splitlines())
+
+
+def make_release_archive(tmp: Path) -> Path:
+    payload = tmp / "payload"
+    binary = payload / "pi" / "pi"
+    binary.parent.mkdir(parents=True)
+    binary.write_text("#!/bin/sh\nprintf 'fake pi\\n'\n", encoding="utf-8")
+    binary.chmod(binary.stat().st_mode | stat.S_IXUSR)
+
+    archive = tmp / "pi-linux-x64.tar.gz"
+    subprocess.run(["tar", "-czf", str(archive), "-C", str(payload), "pi"], check=True)
+    return archive
+
+
+def write_fake_curl(fakebin: Path) -> None:
+    fakebin.mkdir()
+    curl = fakebin / "curl"
+    curl.write_text(
+        "#!/bin/sh\n"
+        "set -eu\n"
+        "output=\n"
+        "while [ \"$#\" -gt 0 ]; do\n"
+        "  case \"$1\" in\n"
+        "    --output)\n"
+        "      shift\n"
+        "      output=\"$1\"\n"
+        "      ;;\n"
+        "  esac\n"
+        "  shift || break\n"
+        "done\n"
+        "if [ -n \"$output\" ]; then\n"
+        "  cp \"$TEST_RELEASE_ARCHIVE\" \"$output\"\n"
+        "else\n"
+        "  printf '%s\\n' \"$TEST_RELEASE_JSON\"\n"
+        "fi\n",
+        encoding="utf-8",
+    )
+    curl.chmod(curl.stat().st_mode | stat.S_IXUSR)
+
+
+def run_fetch_with_fake_release(
+    archive: Path,
+    install: Path,
+    fakebin: Path,
+    published_digest: str,
+) -> subprocess.CompletedProcess[str]:
+    env = os.environ.copy()
+    env.update(
+        {
+            "CRAFT_ARCH_BUILD_FOR": "amd64",
+            "CRAFT_PART_INSTALL": str(install),
+            "PATH": f"{fakebin}{os.pathsep}{env['PATH']}",
+            "PI_AGENT_VERSION": "0.74.0",
+            "PI_AGENT_RELEASE_API_URL": "https://api.example.invalid/repos/pi/releases/tags/v0.74.0",
+            "TEST_RELEASE_ARCHIVE": str(archive),
+            "TEST_RELEASE_JSON": (
+                '{"assets":[{"url":"https://api.example.invalid/assets/1",'
+                '"name":"pi-linux-x64.tar.gz",'
+                f'"digest":"sha256:{published_digest}"'
+                '}]}'
+            ),
+        }
+    )
+    return subprocess.run(
+        [str(FETCH_RELEASE)],
+        cwd=ROOT,
+        env=env,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
 
 
 class SnapcraftYamlTests(unittest.TestCase):
@@ -110,6 +182,34 @@ class ScriptTests(unittest.TestCase):
         )
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("unsupported snap architecture: riscv64", result.stderr)
+
+    def test_fetch_release_accepts_github_published_sha256(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            archive = make_release_archive(tmp)
+            digest = hashlib.sha256(archive.read_bytes()).hexdigest()
+            install = tmp / "install"
+            fakebin = tmp / "fakebin"
+            write_fake_curl(fakebin)
+
+            result = run_fetch_with_fake_release(archive, install, fakebin, digest)
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertTrue((install / "pi" / "pi").exists())
+
+    def test_fetch_release_rejects_mismatched_github_published_sha256(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            archive = make_release_archive(tmp)
+            install = tmp / "install"
+            fakebin = tmp / "fakebin"
+            write_fake_curl(fakebin)
+
+            result = run_fetch_with_fake_release(archive, install, fakebin, "0" * 64)
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("FAILED", result.stdout + result.stderr)
+            self.assertFalse((install / "pi" / "pi").exists())
 
     def test_wrapper_requires_snap_runtime(self) -> None:
         env = os.environ.copy()

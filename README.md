@@ -34,6 +34,9 @@ https://github.com/earendil-works/pi-mono/releases/download/v<VERSION>/pi-linux-
 
 Supported Snap architectures are `amd64` and `arm64`.
 
+During packaging, the fetch script verifies the downloaded archive against the
+SHA-256 digest published for that release asset by GitHub.
+
 ## Test
 
 ```bash
