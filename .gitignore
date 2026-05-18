@@ -1,0 +1,14 @@
+# Snapcraft build output
+.snapcraft/
+parts/
+prime/
+stage/
+*.snap
+*.snap-build
+
+# Python test caches
+__pycache__/
+*.py[cod]
+
+# Local scratch
+/tmp/
