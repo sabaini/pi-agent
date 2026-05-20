@@ -10,8 +10,9 @@ description: |
 
 license: MIT
 website: https://pi.dev
-source-code: https://github.com/earendil-works/pi-mono
-issues: https://github.com/earendil-works/pi-mono/issues
+source-code: https://github.com/earendil-works/pi
+issues: https://github.com/earendil-works/pi/issues
+contact: https://github.com/earendil-works/pi/issues
 
 grade: devel
 confinement: classic
@@ -28,8 +29,8 @@ apps:
 parts:
   staged-tools:
     plugin: nil
-    # Only auto-patch distro helper packages. The Pi release binary is a
-    # prebuilt Bun executable and should not be modified by patchelf.
+    # Auto-patch only distro helper packages here. The Pi release binary is
+    # patched explicitly in its part so patchelf operations happen in a safe order.
     build-attributes:
       - enable-patchelf
     stage-packages:
@@ -43,6 +44,7 @@ parts:
     build-packages:
       - ca-certificates
       - curl
+      - patchelf
       - tar
     override-build: |
       set -eu
@@ -67,4 +69,11 @@ parts:
 
       craftctl set version="$version"
       PI_AGENT_VERSION="$version" "$CRAFT_PROJECT_DIR/snap/local/fetch-release.sh"
+
+      # Satisfy the classic confinement linter for the prebuilt ELF executable.
+      # Set RPATH before the longer interpreter; doing this in the opposite order
+      # can leave this Bun-produced executable with invalid program headers.
+      patchelf --force-rpath --set-rpath /snap/core24/current/lib/x86_64-linux-gnu "$CRAFT_PART_INSTALL/pi/pi"
+      patchelf --set-interpreter /snap/core24/current/lib64/ld-linux-x86-64.so.2 "$CRAFT_PART_INSTALL/pi/pi"
+
       install -Dm755 "$CRAFT_PROJECT_DIR/snap/local/pi" "$CRAFT_PART_INSTALL/bin/pi"

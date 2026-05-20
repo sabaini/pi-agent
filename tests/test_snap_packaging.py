@@ -120,6 +120,7 @@ class SnapcraftYamlTests(unittest.TestCase):
         self.assertNotRegex(text, r"(?m)^version:")
         self.assertRegex(text, r"(?m)^confinement: classic$")
         self.assertRegex(text, r"(?m)^license: MIT$")
+        self.assertRegex(text, r"(?m)^contact: https://github.com/earendil-works/pi/issues$")
         self.assertRegex(text, r"(?m)^grade: devel$")
 
     def test_declares_supported_architectures(self) -> None:
@@ -137,7 +138,7 @@ class SnapcraftYamlTests(unittest.TestCase):
         self.assertIn('PI_AGENT_VERSION="$version" "$CRAFT_PROJECT_DIR/snap/local/fetch-release.sh"', text)
         self.assertIn('snap/local/pi', text)
 
-    def test_patchelf_only_applies_to_staged_helper_packages(self) -> None:
+    def test_patchelf_handles_helpers_and_pi_binary(self) -> None:
         text = read_text(SNAPCRAFT_YAML)
         self.assertRegex(
             text,
@@ -152,9 +153,19 @@ class SnapcraftYamlTests(unittest.TestCase):
             r"      - git\n"
             r"      - ripgrep",
         )
-        pi_part = re.search(r"(?ms)^  pi:\n(.*?)(?:\n  [A-Za-z0-9_-]+:|\Z)", text)
+        pi_part = re.search(r"(?ms)^parts:\n.*?^  pi:\n(.*?)(?:\n  [A-Za-z0-9_-]+:|\Z)", text)
         self.assertIsNotNone(pi_part)
+        assert pi_part is not None
         self.assertNotIn("enable-patchelf", pi_part.group(1))
+        self.assertIn("      - patchelf\n", pi_part.group(1))
+        self.assertIn(
+            "patchelf --force-rpath --set-rpath /snap/core24/current/lib/x86_64-linux-gnu",
+            pi_part.group(1),
+        )
+        self.assertIn(
+            "patchelf --set-interpreter /snap/core24/current/lib64/ld-linux-x86-64.so.2",
+            pi_part.group(1),
+        )
 
 
 class ScriptTests(unittest.TestCase):
